@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/components/ui/use-toast';
 import AppTutorial from '@/components/AppTutorial';
 import HealthNewsPopup from '@/components/HealthNewsPopup';
 import GeminiHealthTip from '@/components/GeminiHealthTip';
@@ -27,11 +29,55 @@ import {
   Droplets,
   AlertTriangle,
   HeartPulse,
+  Search,
+  FileText,
+  ChevronRight,
+  Tag,
+  Zap,
+  Sparkles,
 } from 'lucide-react';
+
+// Import data files
+import { medicines } from '@/data/medicines';
+import { governmentSchemes } from '@/data/schemes';
 
 const Index: React.FC = () => {
   const { t, language } = useLanguage();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [showTutorial, setShowTutorial] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+
+
+
+  const allSearchableItems = [
+    ...medicines.map(m => language === 'hi' ? m.nameHi : m.name),
+    ...governmentSchemes.map(s => language === 'hi' ? s.nameHi : s.name),
+    'Primary Health Centre',
+    'Community Health Centre',
+    'District Hospital',
+    'City General Hospital',
+    'St. Mary\'s Clinic',
+    'Apollo Pharmacy',
+    'MedPlus',
+  ];
+
+  useEffect(() => {
+    if (searchQuery.trim().length > 1) {
+      const filtered = allSearchableItems.filter(item => 
+        item.toLowerCase().includes(searchQuery.toLowerCase())
+      ).slice(0, 5);
+      setSuggestions(filtered);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    }
+  }, [searchQuery, language, allSearchableItems]);
 
   useEffect(() => {
     const tutorialCompleted = localStorage.getItem('tutorialCompleted');
@@ -41,14 +87,64 @@ const Index: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    const observerOptions = {
+      threshold: 0.1,
+    };
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('active');
+        }
+      });
+    }, observerOptions);
+
+    const revealElements = document.querySelectorAll('.reveal');
+    revealElements.forEach((el) => observer.observe(el));
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleSearch = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/store?search=${encodeURIComponent(searchQuery.trim())}`);
+    }
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      toast({
+        title: language === 'hi' ? 'पर्चा अपलोड किया गया' : 'Prescription Uploaded',
+        description: language === 'hi' 
+          ? `${file.name} सफलतापूर्वक प्राप्त हुआ।` 
+          : `${file.name} has been received successfully.`,
+      });
+    }
+  };
+
   const features = [
     {
       path: '/symptoms',
       label: t.symptomTracker,
       labelHi: 'लक्षण ट्रैकर',
       descHi: 'अपनी तकलीफ लिखें',
-      descEn: 'Record your symptoms',
-      color: 'bg-gradient-to-br from-rose-500 to-pink-600',
+      descEn: 'Record symptoms',
+      color: 'bg-rose-50',
+      iconColor: 'text-rose-600',
       iconComponent: Stethoscope,
     },
     {
@@ -57,17 +153,29 @@ const Index: React.FC = () => {
       labelHi: 'स्वास्थ्य सुझाव',
       descHi: 'सरल स्वास्थ्य टिप्स',
       descEn: 'Simple health tips',
-      color: 'bg-gradient-to-br from-amber-500 to-orange-600',
+      color: 'bg-amber-50',
+      iconColor: 'text-amber-600',
       iconComponent: Lightbulb,
     },
     {
       path: '/store',
       label: t.medicineStore,
       labelHi: 'दवाई दुकान',
-      descHi: 'सस्ती दवाइयां खरीदें',
-      descEn: 'Buy affordable medicines',
-      color: 'bg-gradient-to-br from-emerald-500 to-teal-600',
+      descHi: '27% तक बचत',
+      descEn: 'SAVE 27%',
+      color: 'bg-rose-50',
+      iconColor: 'text-rose-600',
       iconComponent: Pill,
+    },
+    {
+      path: '/symptoms',
+      label: language === 'hi' ? 'लैब टेस्ट' : 'Lab Tests',
+      labelHi: 'लैब टेस्ट',
+      descHi: '70% तक छूट',
+      descEn: 'UPTO 70% OFF',
+      color: 'bg-blue-50',
+      iconColor: 'text-blue-600',
+      iconComponent: Activity,
     },
     {
       path: '/assistant',
@@ -75,8 +183,29 @@ const Index: React.FC = () => {
       labelHi: 'AI सहायक',
       descHi: 'स्वास्थ्य मार्गदर्शन',
       descEn: 'Health guidance',
-      color: 'bg-gradient-to-br from-blue-500 to-indigo-600',
+      color: 'bg-blue-50',
+      iconColor: 'text-blue-600',
       iconComponent: Bot,
+    },
+    {
+      path: '/assistant',
+      label: language === 'hi' ? 'डॉक्टर परामर्श' : 'Doctor Consult',
+      labelHi: 'डॉक्टर परामर्श',
+      descHi: '₹199 से शुरू',
+      descEn: 'FROM ₹199',
+      color: 'bg-emerald-50',
+      iconColor: 'text-emerald-600',
+      iconComponent: Users,
+    },
+    {
+      path: '/store',
+      label: language === 'hi' ? 'ब्रांडेड विकल्प' : 'Branded Substitute',
+      labelHi: 'ब्रांडेड विकल्प',
+      descHi: '50% तक बचत',
+      descEn: 'UPTO 50% OFF',
+      color: 'bg-amber-50',
+      iconColor: 'text-amber-600',
+      iconComponent: Zap,
     },
     {
       path: '/schemes',
@@ -84,7 +213,8 @@ const Index: React.FC = () => {
       labelHi: 'सरकारी योजना',
       descHi: 'मुफ्त स्वास्थ्य सेवाएं',
       descEn: 'Free health services',
-      color: 'bg-gradient-to-br from-purple-500 to-violet-600',
+      color: 'bg-purple-50',
+      iconColor: 'text-purple-600',
       iconComponent: ShieldIcon,
     },
     {
@@ -93,8 +223,29 @@ const Index: React.FC = () => {
       labelHi: 'नजदीकी अस्पताल',
       descHi: 'अस्पताल खोजें',
       descEn: 'Find hospitals',
-      color: 'bg-gradient-to-br from-cyan-500 to-sky-600',
+      color: 'bg-cyan-50',
+      iconColor: 'text-cyan-600',
       iconComponent: Hospital,
+    },
+    {
+      path: '/tips',
+      label: language === 'hi' ? 'स्वास्थ्य ब्लॉग' : 'Health Blogs',
+      labelHi: 'स्वास्थ्य ब्लॉग',
+      descHi: 'नया पढ़ें',
+      descEn: 'READ NEW',
+      color: 'bg-pink-50',
+      iconColor: 'text-pink-600',
+      iconComponent: FileText,
+    },
+    {
+      path: '/schemes',
+      label: 'Health PLUS',
+      labelHi: 'Health PLUS',
+      descHi: '5% अतिरिक्त बचत',
+      descEn: 'SAVE 5% EXTRA',
+      color: 'bg-indigo-50',
+      iconColor: 'text-indigo-600',
+      iconComponent: Sparkles,
     },
   ];
 
@@ -112,10 +263,10 @@ const Index: React.FC = () => {
       {/* Hero Section */}
       <section className="relative bg-gradient-to-br from-primary via-primary to-chart-2 text-primary-foreground py-16 px-4 overflow-hidden">
         <div className="absolute inset-0 opacity-10">
-          <HeartPulse className="absolute top-10 left-10 w-32 h-32" />
-          <Hospital className="absolute top-20 right-20 w-24 h-24" />
-          <Pill className="absolute bottom-10 left-1/4 w-28 h-28" />
-          <Stethoscope className="absolute bottom-20 right-10 w-20 h-20" />
+          <HeartPulse className="absolute top-10 left-10 w-32 h-32 text-primary-foreground/20 animate-float" style={{ animationDelay: '0s' }} />
+          <Hospital className="absolute top-20 right-20 w-24 h-24 text-primary-foreground/20 animate-float" style={{ animationDelay: '1s' }} />
+          <Pill className="absolute bottom-10 left-1/4 w-28 h-28 text-primary-foreground/20 animate-float" style={{ animationDelay: '2s' }} />
+          <Stethoscope className="absolute bottom-20 right-10 w-20 h-20 text-primary-foreground/20 animate-float" style={{ animationDelay: '1.5s' }} />
         </div>
 
         <div className="container mx-auto relative z-10">
@@ -164,22 +315,22 @@ const Index: React.FC = () => {
         </div>
       </section>
 
-      {/* Features */}
+      {/* Features/Our Services Section */}
       <section className="container mx-auto px-4 py-12">
         <h2 className="text-2xl font-semibold text-center mb-8">
           {language === 'hi' ? '🌟 हमारी सेवाएं' : '🌟 Our Services'}
         </h2>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {features.map((feature) => (
             <Link key={feature.path} to={feature.path}>
               <Card className="border-2 hover:shadow-xl transition-all hover:-translate-y-1 h-full overflow-hidden">
                 <CardContent className="p-0">
                   <div className={`${feature.color} p-6 text-center`}>
-                    <feature.iconComponent className="w-12 h-12 mx-auto text-white" />
+                    <feature.iconComponent className={`w-12 h-12 mx-auto ${feature.iconColor}`} />
                   </div>
                   <div className="p-4 text-center">
-                    <h3 className="font-medium mb-1">{feature.label}</h3>
+                    <h3 className="font-medium mb-1">{language === 'hi' ? feature.labelHi : feature.label}</h3>
                     <p className="text-sm text-muted-foreground">
                       {language === 'hi' ? feature.descHi : feature.descEn}
                     </p>
@@ -195,6 +346,72 @@ const Index: React.FC = () => {
         </div>
       </section>
 
+      {/* Search Section */}
+      <section className="container mx-auto px-4 -mt-8 relative z-20 reveal">
+        <Card className="border-2 border-border shadow-xl overflow-hidden">
+          <CardContent className="p-4 md:p-8">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+              <div className="flex-1">
+                <h2 className="text-xl md:text-2xl font-bold text-foreground mb-2">
+                  {language === 'hi' ? 'आप क्या खोज रहे हैं?' : 'What are you looking for?'}
+                </h2>
+                <div className="relative mt-4" ref={searchRef}>
+                  <form onSubmit={handleSearch} className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-5 h-5" />
+                    <Input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => searchQuery.trim().length > 1 && setShowSuggestions(true)}
+                      placeholder={language === 'hi' ? 'दवाइयां, अस्पताल या लक्षण खोजें...' : 'Search for medicines, hospitals, or symptoms...'}
+                      className="w-full pl-10 pr-24 md:pr-32 py-6 md:py-7 bg-muted/50 border-2 border-border rounded-xl focus-visible:ring-primary text-sm md:text-base"
+                    />
+                    <Button type="submit" className="absolute right-1.5 top-1/2 -translate-y-1/2 px-4 md:px-8 h-9 md:h-11 text-xs md:text-sm">
+                      {language === 'hi' ? 'खोजें' : 'Search'}
+                    </Button>
+                  </form>
+
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-card border-2 border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+                      {suggestions.map((suggestion, index) => (
+                        <button
+                          key={index}
+                          className="w-full text-left px-4 py-3 hover:bg-muted transition-colors flex items-center gap-3 border-b border-border last:border-0"
+                          onClick={() => {
+                            setSearchQuery(suggestion);
+                            setShowSuggestions(false);
+                            navigate(`/store?search=${encodeURIComponent(suggestion)}`);
+                          }}
+                        >
+                          <Search className="w-4 h-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{suggestion}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Category Quick Links */}
+                <div className="flex flex-wrap gap-x-4 gap-y-2 mt-4">
+                  {['Medicine', 'Healthcare', 'Lab Tests', 'Doctor Consult', 'Offers'].map((cat) => (
+                    <button 
+                      key={cat} 
+                      onClick={() => {
+                        setSearchQuery(cat);
+                        navigate(`/store?search=${encodeURIComponent(cat)}`);
+                      }}
+                      className="text-xs md:text-sm text-muted-foreground hover:text-primary transition-colors font-medium"
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       {/* Daily Health Tip */}
       <section className="container mx-auto px-4 py-8">
         <h2 className="text-2xl font-semibold text-center mb-6">
@@ -205,8 +422,10 @@ const Index: React.FC = () => {
         </div>
       </section>
 
-      {/* Emergency */}
-      <section className="container mx-auto px-4 pb-12">
+
+
+      {/* Emergency Banner */}
+      <section className="container mx-auto px-4 pb-12 reveal">
         <Card className="border-2 border-destructive bg-destructive/10">
           <CardContent className="p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
